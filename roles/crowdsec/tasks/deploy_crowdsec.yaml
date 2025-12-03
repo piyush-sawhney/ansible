@@ -1,7 +1,7 @@
 - name: Checkout Git Repository with Compose files
   ansible.builtin.git:
     repo: "{{ crowdsec_repo_url }}"
-    dest: "{{ compose_dest }}"
+    dest: "{{ compose_dest }}/crowdsec"
     version: main
     update: yes
     force: yes
@@ -31,7 +31,7 @@
   get_url:
     url: https://install.crowdsec.net
     dest: /tmp/install_crowdsec.sh
-    mode: '0755
+    mode: '0755'
 
 - name: Install CrowdSec Host if not already installed
   command: /tmp/install_crowdsec.sh
@@ -53,4 +53,3 @@
     minute: "0"
     hour: "*/3"
     job: "docker compose -p 'crowdsec' exec crowdsec cscli hub update && docker compose -p 'crowdsec' exec crowdsec cscli hub upgrade > /dev/null 2>&1"
-  
