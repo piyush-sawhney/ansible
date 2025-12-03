@@ -1,0 +1,7 @@
+- name: Install UFW
+  when: install_ufw
+  import_tasks: install_ufw.yaml
+
+- name: Harden UFW
+  when: ufw_hardening_enabled
+  import_tasks: harden_ufw.yaml

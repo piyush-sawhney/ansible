@@ -1,0 +1,3 @@
+- name: Deploy Traefik
+  when: deploy_traefik
+  import_tasks: deploy_traefik.yaml

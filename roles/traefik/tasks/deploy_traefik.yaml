@@ -1,0 +1,60 @@
+- name: Checkout Git Repository with Compose files
+  ansible.builtin.git:
+    repo: "{{ traefik_repo_url }}"
+    dest: "{{ compose_dest }}/traefik"
+    version: main
+    update: yes
+    force: yes
+
+- name: Render Traefik .env file from Vault
+  ansible.builtin.template:
+    src: templates/traefik.env.j2
+    dest: "{{ compose_dest }}/traefik/.env"
+    mode: '0600'
+
+- name: Ensure configs directory exists
+  ansible.builtin.file:
+    path: "{{ compose_dest }}/traefik/configs"
+    state: directory
+    mode: '0755'
+    
+- name: Generate traefik.yaml file
+  ansible.builtin.template:
+    src: templates/traefik.yaml.j2
+    dest: "{{ compose_dest }}/traefik/configs/traefik.yaml"
+
+- name: Generate config.yaml file
+  ansible.builtin.template:
+    src: templates/config.yaml.j2
+    dest: "{{ compose_dest }}/traefik/configs/config.yaml"
+
+- name: Ensure acme.json exists as a file
+  ansible.builtin.file:
+    path: "{{ compose_dest }}/traefik/data/acme.json"
+    state: touch
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: '0600'
+
+- name: Deploy Traefik stack
+  community.docker.docker_compose_v2:
+    project_src: "{{ compose_dest }}/traefik"
+    files:
+      - traefik-compose.yaml
+    build: never
+    state: present
+    recreate: auto
+    env_files:
+      - ".env"
+
+- name: Ensure Traefik is running
+  community.docker.docker_container_info:
+    name: traefik
+  register: traefik_info
+  changed_when: false
+
+- name: Fail if Traefik container did not start
+  ansible.builtin.fail:
+    msg: "Traefik container is not running after deployment!"
+  when: traefik_info.container is not defined or traefik_info.container.State.Status != "running"
+  changed_when: false

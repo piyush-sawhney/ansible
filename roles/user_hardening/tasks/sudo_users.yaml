@@ -1,0 +1,32 @@
+---
+- name: Get list of users in sudo group
+  ansible.builtin.shell: "grep sudo /etc/group | awk -F: '{print $NF}'"
+  changed_when: false
+  failed_when: discovered_sudo_group_users.rc not in [0, 1]
+  register: discovered_sudo_group_users
+
+- name: Create list of discovered sudo group users
+  ansible.builtin.set_fact:
+    discovered_sudo_group_users_list: "{{ discovered_sudo_group_users.stdout | split(',') }}"
+
+- name: Find non-required sudo group users
+  ansible.builtin.set_fact:
+    sudo_group_members_not_required: "{{ discovered_sudo_group_users_list | difference(sudo_allowed_users) }}"
+
+- name: Show non-required sudo group users
+  ansible.builtin.debug:
+    msg: "The following users {{ sudo_group_members_not_required }} have been found in the sudo group but not part of the 'sudo_allowed_users' variable"
+
+- name: Make required members part of sudo group
+  ansible.builtin.user:
+    name: "{{ item }}"
+    append: true
+    groups: sudo
+  loop: "{{ sudo_allowed_users }}"
+
+- name: Remove non-required members from sudo group
+  when:
+    - to_remove_sudo_users
+    - sudo_group_members_not_required | length > 0
+  ansible.builtin.command: gpasswd -d "{{ item }}" sudo
+  loop: "{{ sudo_group_members_not_required }}"

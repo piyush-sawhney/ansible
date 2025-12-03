@@ -1,0 +1,56 @@
+- name: Checkout Git Repository with Compose files
+  ansible.builtin.git:
+    repo: "{{ crowdsec_repo_url }}"
+    dest: "{{ compose_dest }}"
+    version: main
+    update: yes
+    force: yes
+
+- name: Deploy CrowdSec stack
+  community.docker.docker_compose_v2:
+    project_src: "{{ compose_dest }}/crowdsec"
+    files:
+      - crowdsec-compose.yaml
+    build: never
+    state: present
+    recreate: auto
+
+- name: Ensure CrowdSec is running
+  community.docker.docker_container_info:
+    name: crowdsec
+  register: crowdsec_info
+  changed_when: false
+
+- name: Fail if crowdsec container did not start
+  ansible.builtin.fail:
+    msg: "Crowdsec container is not running after deployment!"
+  when: crowdsec_info.container is not defined or crowdsec_info.container.State.Status != "running"
+  changed_when: false
+  
+- name: Download CrowdSec install script
+  get_url:
+    url: https://install.crowdsec.net
+    dest: /tmp/install_crowdsec.sh
+    mode: '0755
+
+- name: Install CrowdSec Host if not already installed
+  command: /tmp/install_crowdsec.sh
+  args:
+    creates: /usr/local/bin/crowdsec
+  become: true
+
+- name: Ensure CrowdSec Firewall Bouncer (iptables) is installed
+  apt:
+    name: crowdsec-firewall-bouncer-iptables
+    state: present
+    update_cache: yes
+  become: true
+
+- name: Enable Auto Update and Upgrade for Crowdsec Hub
+  ansible.builtin.cron:
+    name: "Update and Upgrade CrowdSec Hub every 3 hours"
+    user: "{{ ansible_user }}"
+    minute: "0"
+    hour: "*/3"
+    job: "docker compose -p 'crowdsec' exec crowdsec cscli hub update && docker compose -p 'crowdsec' exec crowdsec cscli hub upgrade > /dev/null 2>&1"
+  

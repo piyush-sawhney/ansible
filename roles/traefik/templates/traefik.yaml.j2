@@ -1,0 +1,57 @@
+api:
+  dashboard: false
+  insecure: false
+entryPoints:
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entrypoint:
+          to: websecure
+          scheme: https
+          permanent: true   
+  websecure:
+    address: ":443"
+    http:
+      middlewares:
+        - crowdsec-bouncer@file
+      tls: 
+        options: modern@file
+
+providers:
+  docker:
+    exposedByDefault: false
+    network: traefik-public
+  file:
+    filename: /config.yaml
+
+
+certificatesResolvers:
+  cloudflare:
+    acme:
+      caServer: {{ cloudflare_acme_server }}
+      email: {{ cloudflare_email }}
+      storage: acme.json
+      dnsChallenge:
+        provider: cloudflare
+        resolvers:
+          - "1.1.1.1:53"
+          - "1.0.0.1:53"
+  letsencrypt:
+    acme:
+      email: {{ le_email }}
+      storage: acme.json
+      httpChallenge:
+        entryPoint: "web"
+            
+log:
+  level: "INFO"
+  filePath: "/var/log/traefik/traefik.log"
+accessLog:
+  filePath: "/var/log/traefik/access.log"
+
+experimental:
+  plugins:
+    crowdsec-bouncer-traefik-plugin:
+      moduleName: "github.com/maxlerebourg/crowdsec-bouncer-traefik-plugin"
+      version: "{{ traefik_bouncer_version }}"

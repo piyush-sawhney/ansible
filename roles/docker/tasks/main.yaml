@@ -1,0 +1,7 @@
+- name: Install Docker and Docker Compose
+  when: install_docker
+  import_tasks: install.yaml
+
+- name: Configure Docker users
+  when: enable_docker_users
+  import_tasks: docker_users.yaml

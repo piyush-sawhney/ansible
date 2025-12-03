@@ -1,0 +1,19 @@
+---
+- name: "List of user accounts with empty password - UBUNTU 24.04 LTS"
+  ansible.builtin.shell: "cat /etc/shadow | awk -F: '($2 == \"\" ) {j++;print $1; } END {exit j}'"
+  changed_when: false
+  failed_when: pre_setup_username_no_password.rc not in [ 0, 1 ]
+  register: pre_setup_username_no_password
+  
+- name: Ubuntu 24.04 LTS no user accounts should have empty passwords
+  when:
+    - pre_setup_username_no_password.stdout | length > 0 
+  block:
+    - name: Listing user accounts with empty password - UBUNTU 24.04 LTS
+      ansible.builtin.debug:
+        msg: "Warning!! The following accounts have blank passwords {{ pre_setup_username_no_password.stdout_lines }} "
+    - name: Lock accounts with empty password - UBUNTU 24.04 LTS
+      ansible.builtin.user:
+        name: "{{ item }}"
+        password_lock: true
+      loop: "{{ pre_setup_username_no_password.stdout_lines }}"

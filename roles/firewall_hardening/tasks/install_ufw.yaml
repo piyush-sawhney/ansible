@@ -1,0 +1,14 @@
+---
+- name: Ensure UFW is installed
+  ansible.builtin.package:
+    name: ufw
+    state: present
+
+- name: Verify UFW installation
+  ansible.builtin.command: ufw --version
+  register: ufw_version
+  changed_when: false
+
+- name: Show UFW version
+  ansible.builtin.debug:
+    msg: "UFW is installed: {{ ufw_version.stdout }}"

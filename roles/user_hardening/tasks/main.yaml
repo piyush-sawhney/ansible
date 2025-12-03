@@ -1,0 +1,7 @@
+- name: Lock accounts with empty passwords
+  when: lock_user_accounts
+  import_tasks: lock_user_accounts.yaml
+
+- name: Sudo users hardening
+  when: harden_sudo_users
+  import_tasks: sudo_users.yaml

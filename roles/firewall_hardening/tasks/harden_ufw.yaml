@@ -1,0 +1,41 @@
+---
+- name: Reset UFW to default
+  community.general.ufw:
+    state: reset
+    comment: "Reset firewall to clean state"
+
+- name: Show SSH port from inventory
+  ansible.builtin.debug:
+    msg: "Using SSH port: {{ ansible_port }}"
+
+- name: Allow SSH first (prevent lockout)
+  community.general.ufw:
+    rule: allow
+    to_port: "{{ ansible_port }}"
+    proto: tcp
+    comment: "Always allow SSH first"
+
+- name: Allow HTTP
+  community.general.ufw:
+    rule: allow
+    to_port: 80
+    proto: tcp
+    comment: "Allow web traffic"
+
+- name: Allow HTTPS
+  community.general.ufw:
+    rule: allow
+    to_port: 443
+    proto: tcp
+    comment: "Allow secure web traffic"
+
+- name: Deny all other incoming traffic
+  community.general.ufw:
+    rule: deny
+    direction: in
+    comment: "Deny all other incoming connections"
+
+- name: Enable UFW with logging 
+  community.general.ufw:
+    state: enabled
+    logging: on

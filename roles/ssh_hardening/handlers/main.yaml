@@ -1,0 +1,23 @@
+# Test SSH config
+- name: Validate sshd config before restarting
+  become: true
+  ansible.builtin.command: sshd -t -f /etc/ssh/sshd_config
+  register: sshd_test
+  ignore_errors: yes
+  listen: Restart SSH
+
+# Restart only if config valid
+- name: Restart SSH safely
+  become: true
+  ansible.builtin.service:
+    name: ssh
+    state: restarted
+  when: sshd_test.rc == 0
+  listen: Restart SSH
+
+# Warning if config is invalid
+- name: Warn about invalid SSH config
+  ansible.builtin.debug:
+    msg: "SSHD config invalid! Not restarting to prevent lockout."
+  when: sshd_test.rc != 0
+  listen: Restart SSH

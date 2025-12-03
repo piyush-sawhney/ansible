@@ -1,0 +1,65 @@
+- name: Check if SSH allowed users exist
+  ansible.builtin.command: getent passwd {{ item }}
+  register: user_check
+  ignore_errors: yes
+  loop: "{{ ssh_allowed_users + ssh_tcp_allowed_users }}"
+  loop_control:
+    label: "{{ item }}"
+
+- name: Fail if user does not exist
+  ansible.builtin.fail:
+    msg: "User '{{ item.item }}' does not exist!"
+  when: item.rc != 0
+  loop: "{{ user_check.results }}"
+  
+- name: Allow selected SSH users
+  ansible.builtin.blockinfile:
+    path: /etc/ssh/sshd_config
+    marker: "# {mark} ANSIBLE MANAGED BLOCK: Allow SSH for selected users"
+    block: |
+      AllowUsers {{ ssh_allowed_users | join(' ') }}     
+  notify: Restart SSH
+
+- name: Build SSH user rules
+  ansible.builtin.blockinfile:
+    path: /etc/ssh/sshd_config
+    marker: "# {mark} ANSIBLE MANAGED BLOCK: SSH User policies"
+    block: |
+      {% for user in ssh_allowed_users | union(ssh_tcp_allowed_users) %}
+      Match User {{ user }}
+          PasswordAuthentication no
+          PubkeyAuthentication yes
+      {% if user in ssh_tcp_allowed_users %}
+          AllowTcpForwarding yes
+          PermitOpen 127.0.0.1:8080
+      {% else %}
+          AllowTcpForwarding no
+      {% endif %}
+      {% endfor %}
+  notify: Restart SSH
+
+- name: Set permissions on /etc/ssh/sshd_config
+  ansible.builtin.file:
+    path: /etc/ssh/sshd_config
+    owner: root
+    group: root
+    mode: '0600'
+  notify: Restart SSH
+
+- name: Harden SSH daemon - global settings
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regex: "{{ item.regex }}"
+    line: "{{ item.line }}"
+    validate: 'sshd -t -f %s'
+  loop:
+    - { regex: '^#?PermitEmptyPasswords', line: 'PermitEmptyPasswords no'}
+    - { regex: '^#?PermitUserEnvironment', line: 'PermitUserEnvironment no'}
+    - { regex: '^#?PermitRootLogin', line: 'PermitRootLogin no'}
+    - { regex: '^#?PasswordAuthentication', line: 'PasswordAuthentication no'}
+    - { regex: '^#?X11Forwarding', line: 'X11Forwarding no'}
+    - { regex: '^#?AllowAgentForwarding', line: 'AllowAgentForwarding no'}
+    - { regex: '^#?AllowTcpForwarding', line: 'AllowTcpForwarding no' }
+    - { regex: '^#?PubkeyAuthentication', line: 'PubkeyAuthentication yes' }
+    
+  notify: Restart SSH

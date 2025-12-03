@@ -1,0 +1,11 @@
+#docker exec -it crowdsec cscli bouncers add traefik-bouncer
+# Copy App Sec API Key to config traefik Yaml 
+# Update ansible variable
+# docker exec -it crowdsec cscli bouncers add host-firewall  
+# Add API key to local server file
+# sudo nano /etc/crowdsec/bouncers/crowdsec-firewall-bouncer.yaml
+# sudo systemctl restart crowdsec-firewall-bouncer
+# Restart Traefik to apply changes
+# Wait for some time and restart traefik manually
+# docker exec -it traefik cat var/log/traefik/traefik.log
+# docker compose -f app_server/traefik/traefik-compose.yaml restart

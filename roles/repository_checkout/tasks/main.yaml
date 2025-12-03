@@ -1,0 +1,6 @@
+- name: Checkout Git Repository
+  ansible.builtin.git:
+    repo: "{{ github_repository_url }}"
+    dest: "{{ repository_checkout_path }}"
+    version: "{{ github_repository_version }}"
+    update: true
