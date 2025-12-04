@@ -1,5 +1,0 @@
-dependencies:
-  - role: configure_frappe_sites
-  - role: configure_frappe_email
-  - role: configure_backup_encryption
-  - role: deploy_image

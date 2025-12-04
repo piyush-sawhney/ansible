@@ -1,0 +1,45 @@
+- name: Create Frappe site inside backend container
+  community.docker.docker_compose_v2_exec:
+    project_name: "{{ env }}-{{ app_name }}"
+    project_src: "{{ compose_dest }}/frappe_docker"
+    service: backend
+    command: >
+      bench new-site {{ site_name }}
+      --mariadb-user-host-login-scope=%
+      --db-root-password={{ db_password }}
+      --admin-password={{ admin_password }}
+      --verbose
+    tty: true
+    detach: false
+
+- name: Install App on {{ env }} Site
+  community.docker.docker_compose_v2_exec:
+    project_name: "{{ env }}-{{ app_name }}"
+    project_src: "{{ compose_dest }}/frappe_docker"
+    service: backend
+    command: >
+      bench 
+      --site {{ site_name }}
+      install-app {{ app_name }}
+    tty: true
+    detach: false
+
+- name: Enable Scheduler on  {{ env }} Site
+  community.docker.docker_compose_v2_exec:
+    project_name: "{{ env }}-{{ app_name }}"
+    project_src: "{{ compose_dest }}/frappe_docker"
+    service: backend
+    command: >
+      bench 
+      --site {{ site_name }}
+      enable-scheduler
+    tty: true
+    detach: false
+
+- name: Enable Auto Backup with files for {{ env }} Site
+  ansible.builtin.cron:
+    name: "Backing up {{  site_name }} site with files every 12 hours"
+    user: "{{ ansible_user }}"
+    minute: "0"
+    hour: "9,21"
+    job: "docker compose -p '{{ env }}-{{ app_name }}' exec backend bench --site {{ site_name }} backup --with-files > /dev/null 2>&1"
