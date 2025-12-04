@@ -1,0 +1,3 @@
+- name: Install Mariadb Server
+  when: install_mariadb
+  import_tasks: install_db.yaml

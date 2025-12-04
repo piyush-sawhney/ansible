@@ -1,0 +1,44 @@
+- name: Checkout Git Repository with Compose files
+  ansible.builtin.git:
+    repo: "{{ mariadb_repo_url }}"
+    dest: "{{ compose_dest }}/mariadb"
+    version: main
+    update: yes
+    force: yes
+
+- name: Render MariaDB .env file from Vault
+  ansible.builtin.template:
+    src: "templates/mariadb.env.j2"
+    dest: "{{ compose_dest }}/mariadb/.env"
+    mode: '0600'
+
+- name: Deploy MariaDB Stack
+  community.docker.docker_compose_v2:
+    project_name: "mariadb"
+    project_src: "{{ compose_dest }}/mariadb"
+    files:
+      - mariadb-compose.yaml
+    build: never
+    state: present
+    recreate: auto
+    env_files:
+      - "{{ compose_dest }}/mariadb/.env"
+
+- name: Ensure MariaDB is running
+  community.docker.docker_container_info:
+    name: mariadb-database
+  register: mariadb_info
+  changed_when: false
+
+- name: Fail if MariaDB container is not running
+  ansible.builtin.fail:
+    msg: "MariaDB container is not running!"
+  when: mariadb_info.container.State.Status != "running"
+  changed_when: false
+
+- name: Remove temporary key directory
+  become: true
+  file:
+    path: "{{ compose_dest }}/mariadb/.env"
+    state: absent
+

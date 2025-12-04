@@ -2,3 +2,4 @@
   roles:
     - role: traefik
     - role: crowdsec
+    - role: mariadb
