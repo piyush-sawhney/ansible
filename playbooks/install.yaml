@@ -1,4 +1,4 @@
 - hosts: all
   roles:
     - role: deploy_app
-    - role: configure_site
+    # - role: configure_site

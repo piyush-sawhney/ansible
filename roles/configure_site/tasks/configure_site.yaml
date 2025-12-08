@@ -12,17 +12,18 @@
     tty: true
     detach: false
 
-- name: Install App on {{ env }} Site
+- name: Install Apps on {{ env }} Site
   community.docker.docker_compose_v2_exec:
     project_name: "{{ env }}-{{ app_name }}"
     project_src: "{{ compose_dest }}/frappe_docker"
     service: backend
     command: >
-      bench 
+      bench
       --site {{ site_name }}
-      install-app {{ app_name }}
+      install-app {{ item }}
     tty: true
     detach: false
+  loop: "{{ apps_to_install }}"
 
 - name: Enable Scheduler on  {{ env }} Site
   community.docker.docker_compose_v2_exec:

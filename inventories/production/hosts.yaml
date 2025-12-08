@@ -1,0 +1,9 @@
+all:
+  children:
+    wms:
+      hosts:
+        knaps.app
+    brandforce:
+      hosts:
+        app.brandforce.com
+          

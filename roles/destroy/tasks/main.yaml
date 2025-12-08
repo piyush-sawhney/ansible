@@ -1,0 +1,5 @@
+- name: Destroy app
+  import_tasks: destroy_app.yaml
+
+- name: Destroy mariadb
+  import_tasks: destroy_mariadb.yaml

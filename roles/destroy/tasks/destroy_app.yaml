@@ -1,0 +1,40 @@
+- name: Checkout Frappe Docker Git Repository with Compose files
+  ansible.builtin.git:
+    repo: "https://github.com/frappe/frappe_docker.git"
+    dest: "{{ compose_dest }}/frappe_docker"
+    version: main
+    update: yes
+
+- name: Checkout App Repository
+  ansible.builtin.git:
+    repo: "{{ app_repo_url }}"
+    dest: "{{ compose_dest }}/{{ app_name }}"
+    version: main
+    update: yes
+
+- name: Render Frappe {{ env }} .env file from Vault
+  ansible.builtin.template:
+    src: "templates/app.env.j2"
+    dest: "{{ compose_dest }}/{{ app_name }}/.env"
+    mode: '0600'
+
+- name: Destroy {{ app_name }} Stack
+  community.docker.docker_compose_v2:
+    project_name: "{{ env }}-{{ app_name }}"
+    project_src: "{{ compose_dest }}/frappe_docker"
+    files:
+      - compose.yaml
+      - "overrides/compose.redis.yaml"
+      - "{{ compose_dest }}/{{ app_name }}/frappe.yaml"
+    build: never
+    state: absent
+    recreate: auto
+    env_files:
+      - "{{ compose_dest }}/{{ app_name }}/.env"
+
+- name: Delete WMS .env file
+  ansible.builtin.file:
+    state: absent
+    path: "{{ compose_dest }}/{{ app_name }}/.env"
+
+
