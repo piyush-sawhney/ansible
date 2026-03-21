@@ -1,0 +1,135 @@
+---
+- name: Install and update Traefik reverse proxy
+  hosts: "{{ env }}"
+  become: yes
+  vars_files:
+    - "{{ playbook_dir }}/../global_vars/{{ env }}.yaml"
+    - "vars/main.yaml"
+
+  tasks:
+
+    # ============================================================
+    # REPOSITORY
+    # ============================================================
+
+    - name: Checkout Git Repository with Compose files
+      ansible.builtin.git:
+        repo: "{{ traefik_repo_url }}"
+        dest: "{{ compose_dest }}/traefik"
+        version: main
+        update: yes
+        force: yes                               # discards local changes on every run — intentional
+
+    # ============================================================
+    # DIRECTORY STRUCTURE
+    # ============================================================
+
+    - name: Ensure configs directory exists
+      ansible.builtin.file:
+        path: "{{ compose_dest }}/traefik/configs"
+        state: directory
+        owner: root
+        group: root
+        mode: '0750'
+
+    - name: Ensure data directory exists
+      ansible.builtin.file:
+        path: "{{ compose_dest }}/traefik/data"
+        state: directory
+        owner: root
+        group: root
+        mode: '0750'
+
+    # ============================================================
+    # SECRETS AND CONFIG FILES
+    # ============================================================
+
+    - name: Render Traefik .env file from Vault
+      ansible.builtin.template:
+        src: templates/traefik.env.j2
+        dest: "{{ compose_dest }}/traefik/.env"
+        owner: root
+        group: root
+        mode: '0600'
+
+    - name: Generate traefik.yaml file
+      ansible.builtin.template:
+        src: templates/traefik.yaml.j2
+        dest: "{{ compose_dest }}/traefik/configs/traefik.yaml"
+        owner: root
+        group: root
+        mode: '0640'
+
+    - name: Generate config.yaml file
+      ansible.builtin.template:
+        src: templates/config.yaml.j2
+        dest: "{{ compose_dest }}/traefik/configs/config.yaml"
+        owner: root
+        group: root
+        mode: '0640'
+
+    # ============================================================
+    # ACME CERTIFICATE STORAGE
+    # ============================================================
+
+    - name: Check if acme-cf.json exists
+      ansible.builtin.stat:
+        path: "{{ compose_dest }}/traefik/data/acme-cf.json"
+      register: acme_json
+
+    - name: Ensure acme-cf.json exists with correct permissions
+      ansible.builtin.file:
+        path: "{{ compose_dest }}/traefik/data/acme-cf.json"
+        state: touch
+        owner: root
+        group: root
+        mode: '0600'
+      when: not acme_json.stat.exists
+
+    # ============================================================
+    # DEPLOYMENT
+    # ============================================================
+
+    - name: Deploy Traefik stack
+      community.docker.docker_compose_v2:
+        project_src: "{{ compose_dest }}/traefik"
+        files:
+          - traefik-compose.yaml
+        build: never
+        state: present
+        recreate: auto
+        env_files:
+          - ".env"
+
+    # ============================================================
+    # VERIFICATION
+    # ============================================================
+
+    - name: Ensure Traefik container is running
+      community.docker.docker_container_info:
+        name: traefik
+      register: traefik_info
+      changed_when: false
+
+    - name: Fail if Traefik container did not start
+      ansible.builtin.fail:
+        msg: "Traefik container is not running after deployment — check docker logs traefik"
+      when: >
+        traefik_info.container is not defined or
+        traefik_info.container.State.Status != "running"
+      changed_when: false
+
+    - name: Wait for Traefik to become healthy
+      community.docker.docker_container_info:
+        name: traefik
+      register: traefik_health
+      until: traefik_health.container.State.Health.Status == "healthy"
+      retries: 6
+      delay: 10
+      changed_when: false
+
+    - name: Fail if Traefik is not healthy
+      ansible.builtin.fail:
+        msg: "Traefik container started but failed health check — check docker logs traefik"
+      when: traefik_health.container.State.Health.Status != "healthy"
+      changed_when: false

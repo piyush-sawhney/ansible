@@ -1,0 +1,102 @@
+---
+- name: SSH Hardening Playbook
+  hosts: "{{ env }}"
+  become: yes
+  vars_files:
+     - "{{ playbook_dir }}/../global_vars/{{ env }}.yaml"
+
+  handlers:
+    - name: Restart SSH
+      ansible.builtin.shell: |
+        if sshd -t -f /etc/ssh/sshd_config; then
+          systemctl restart ssh
+          echo "SSH restarted successfully"
+        else
+          echo "SSHD config invalid — not restarting to prevent lockout"
+          exit 0
+        fi
+      become: yes
+      listen: Restart SSH
+
+  tasks:
+    # -----------------------------------------------------------------------
+    # Pre-flight: verify all declared users actually exist on the host
+    # -----------------------------------------------------------------------
+    - name: Check if SSH allowed users exist
+      ansible.builtin.command: getent passwd {{ item }}
+      register: user_check
+      ignore_errors: yes
+      loop: "{{ ssh_allowed_users + ssh_tcp_allowed_users }}"
+      loop_control:
+        label: "{{ item }}"
+
+    - name: Fail if user does not exist
+      ansible.builtin.fail:
+        msg: "User '{{ item.item }}' does not exist on this host!"
+      when: item.rc != 0
+      loop: "{{ user_check.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    # -----------------------------------------------------------------------
+    # AllowUsers directive — whitelist at the global level
+    # -----------------------------------------------------------------------
+    - name: Allow selected SSH users
+      ansible.builtin.blockinfile:
+        path: /etc/ssh/sshd_config
+        marker: "# {mark} ANSIBLE MANAGED BLOCK: Allow SSH for selected users"
+        block: |
+          AllowUsers {{ ssh_allowed_users | join(' ') }}
+      notify: Restart SSH
+
+    # -----------------------------------------------------------------------
+    # Per-user Match blocks — enforce per-user policy
+    # -----------------------------------------------------------------------
+    - name: Build SSH user rules
+      ansible.builtin.blockinfile:
+        path: /etc/ssh/sshd_config
+        marker: "# {mark} ANSIBLE MANAGED BLOCK: SSH User policies"
+        block: |
+          {% for user in ssh_allowed_users | union(ssh_tcp_allowed_users) %}
+          Match User {{ user }}
+              PasswordAuthentication no
+              PubkeyAuthentication yes
+          {% if user in ssh_tcp_allowed_users %}
+              AllowTcpForwarding yes
+              PermitOpen 127.0.0.1:8080
+          {% else %}
+              AllowTcpForwarding no
+          {% endif %}
+          {% endfor %}
+      notify: Restart SSH
+
+    # -----------------------------------------------------------------------
+    # Global hardening directives via lineinfile
+    # -----------------------------------------------------------------------
+    - name: Harden SSH daemon - global settings
+      ansible.builtin.lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: "{{ item.regexp }}"
+        line: "{{ item.line }}"
+        validate: 'sshd -t -f %s'
+      loop:
+        - { regexp: '^#?PermitEmptyPasswords',   line: 'PermitEmptyPasswords no'   }
+        - { regexp: '^#?PermitUserEnvironment',  line: 'PermitUserEnvironment no'  }
+        - { regexp: '^#?PermitRootLogin',        line: 'PermitRootLogin no'        }
+        - { regexp: '^#?PasswordAuthentication', line: 'PasswordAuthentication no' }
+        - { regexp: '^#?X11Forwarding',          line: 'X11Forwarding no'          }
+        - { regexp: '^#?AllowAgentForwarding',   line: 'AllowAgentForwarding no'   }
+        - { regexp: '^#?AllowTcpForwarding',     line: 'AllowTcpForwarding no'     }
+        - { regexp: '^#?PubkeyAuthentication',   line: 'PubkeyAuthentication yes'  }
+      notify: Restart SSH
+
+    # -----------------------------------------------------------------------
+    # Lock down file permissions on sshd_config
+    # -----------------------------------------------------------------------
+    - name: Set permissions on /etc/ssh/sshd_config
+      ansible.builtin.file:
+        path: /etc/ssh/sshd_config
+        owner: root
+        group: root
+        mode: '0600'
+      notify: Restart SSH

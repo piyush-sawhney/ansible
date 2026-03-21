@@ -1,0 +1,35 @@
+type: http
+name: http_default
+
+log_level: info
+
+group_wait: 30s
+group_threshold: 10
+max_retry: 3
+timeout: 10s
+
+format: |
+{% raw %}
+  {
+    "chat_id": "{% endraw %}{{ crowdsec_telegram_chat_id }}{% raw %}",
+    "text": "🚨 CrowdSec Alert\n{{range . -}}{{range .Decisions -}}{{.Value}} banned for {{.Duration}} — {{.Scenario}}\n{{end -}}{{end -}}",
+    "reply_markup": {
+      "inline_keyboard": [
+        {{ $arrLength := len . -}}
+        {{ range $i, $value := . -}}
+        {{ $V := $value.Source.Value -}}
+        [
+          {"text": "Shodan: {{ $V }}", "url": "https://www.shodan.io/host/{{ $V }}"},
+          {"text": "CrowdSec CTI: {{ $V }}", "url": "https://app.crowdsec.net/cti/{{ $V }}"}
+        ]{{if lt $i (sub $arrLength 1)}},{{end}}
+        {{end -}}
+      ]
+    }
+  }
+{% endraw %}
+
+url: https://api.telegram.org/bot{{ crowdsec_telegram_token }}/sendMessage
+
+method: POST
+headers:
+  Content-Type: "application/json"

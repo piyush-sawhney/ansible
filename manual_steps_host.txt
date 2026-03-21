@@ -1,0 +1,37 @@
+#docker exec -it crowdsec cscli bouncers add traefik-bouncer
+# Copy App Sec API Key to config traefik Yaml 
+# Update ansible variable
+# docker exec -it crowdsec cscli bouncers add host-firewall  
+# Add API key to local server file
+# sudo nano /etc/crowdsec/bouncers/crowdsec-firewall-bouncer.yaml
+# sudo systemctl restart crowdsec-firewall-bouncer
+# Restart Traefik to apply changes
+# Wait for some time and restart traefik manually
+# docker exec -it traefik cat var/log/traefik/traefik.log
+# docker compose -f app_server/traefik/traefik-compose.yaml restart
+
+
+    # ============================================================
+    # Server Preparation
+    # ============================================================
+
+
+ansible-playbook -i inventories/hosts   server/update_upgrade.yaml -e '{"env": "host"}'
+ansible-playbook -i inventories/hosts   server/ufw.yaml -e '{"env": "host"}'
+ansible-playbook -i inventories/hosts   server/ssh.yaml -e '{"env": "host"}'
+ansible-playbook -i inventories/hosts   server/user.yaml -e '{"env": "host"}'
+ansible-playbook -i inventories/hosts   server/docker.yaml -e '{"env": "host"}'
+
+
+    # ============================================================
+    # Installation
+    # ============================================================
+
+ansible-playbook -i inventories/hosts traefik/install_traefik.yaml -e '{"env": "host"}'
+ansible-playbook -i inventories/hosts crowdsec/install_crowdsec.yaml -e '{"env": "host"}'
+ansible-playbook -i inventories/hosts crowdsec/install_firewall_bouncer.yaml -e '{"env": "host"}'
+
+wait for 5 min
+docker exec crowdsec cscli console enroll cmfxregdl000102jmwfgf83md
+
+

@@ -1,0 +1,52 @@
+---
+- name: Install firewall bouncer
+  hosts: "{{ env }}"
+  become: yes
+  vars_files:
+    - "{{ playbook_dir }}/../global_vars/{{ env }}.yaml"
+    - "vars/main.yaml"
+
+  handlers:
+    - name: Restart firewall bouncer
+      listen: "Restart firewall bouncer"
+      ansible.builtin.systemd:
+        name: crowdsec-firewall-bouncer
+        state: restarted
+
+  tasks:
+    - name: Download CrowdSec install script
+      ansible.builtin.get_url:
+        url: https://install.crowdsec.net
+        dest: /tmp/install_crowdsec.sh
+        mode: '0755'
+
+    - name: Install CrowdSec if not already installed
+      ansible.builtin.command: /tmp/install_crowdsec.sh
+      args:
+        creates: /usr/local/bin/crowdsec
+
+    - name: Ensure CrowdSec Firewall Bouncer (iptables) is installed
+      ansible.builtin.apt:
+        name: crowdsec-firewall-bouncer-iptables
+        state: present
+        update_cache: yes
+
+    - name: Set CrowdSec LAPI URL in bouncer config
+      ansible.builtin.lineinfile:
+        path: /etc/crowdsec/bouncers/crowdsec-firewall-bouncer.yaml
+        regexp: '^api_url:'
+        line: "api_url: {{ crowdsec_lapi_url }}"
+      notify: Restart firewall bouncer
+
+    - name: Set CrowdSec API key in bouncer config
+      ansible.builtin.lineinfile:
+        path: /etc/crowdsec/bouncers/crowdsec-firewall-bouncer.yaml
+        regexp: '^api_key:'
+        line: "api_key: {{ crowdsec_firewall_key }}"
+      notify: Restart firewall bouncer
+
+    - name: Ensure CrowdSec Firewall Bouncer service is enabled and started
+      ansible.builtin.systemd:
+        name: crowdsec-firewall-bouncer
+        enabled: yes
+        state: started

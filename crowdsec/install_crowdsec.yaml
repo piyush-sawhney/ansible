@@ -1,0 +1,163 @@
+---
+- name: Install and update CrowdSec
+  hosts: "{{ env }}"
+  become: yes
+  vars_files:
+    - "{{ playbook_dir }}/../global_vars/{{ env }}.yaml"
+    - "vars/main.yaml"
+
+  handlers:
+    - name: Restart firewall bouncer
+      ansible.builtin.systemd:
+        name: crowdsec-firewall-bouncer
+        state: restarted
+
+  tasks:
+
+    # ============================================================
+    # REPOSITORY
+    # ============================================================
+
+    - name: Checkout CrowdSec Git repository
+      ansible.builtin.git:
+        repo: "{{ crowdsec_repo_url }}"
+        dest: "{{ compose_dest }}/crowdsec"
+        version: main
+        update: yes
+        force: yes
+
+    # ============================================================
+    # PREREQUISITES — must happen before docker compose up
+    # ============================================================
+
+    - name: Ensure traefik-logs Docker volume exists
+      # This is declared as external: true in the compose file.
+      # Compose will refuse to start if the volume does not already exist.
+      community.docker.docker_volume:
+        name: traefik-logs
+        state: present
+
+    # ============================================================
+    # SECRETS AND CONFIG FILES
+    # ============================================================
+
+    - name: Ensure configs/notifications directory exists
+      # This directory is gitignored (contains secrets) so it is never
+      # created by the git checkout — we must create it explicitly.
+      ansible.builtin.file:
+        path: "{{ compose_dest }}/crowdsec/configs/notifications"
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+
+    - name: Render CrowdSec .env file from Vault
+      ansible.builtin.template:
+        src: templates/crowdsec.env.j2
+        dest: "{{ compose_dest }}/crowdsec/.env"
+        owner: root
+        group: root
+        mode: '0600'
+
+    - name: Render Telegram notification config from Vault
+      ansible.builtin.template:
+        src: templates/telegram.yaml.j2
+        dest: "{{ compose_dest }}/crowdsec/configs/notifications/telegram.yaml"
+        owner: root
+        group: root
+        mode: '0600'
+
+    # ============================================================
+    # DEPLOYMENT
+    # ============================================================
+
+    - name: Deploy CrowdSec stack
+      community.docker.docker_compose_v2:
+        project_src: "{{ compose_dest }}/crowdsec"
+        files:
+          - crowdsec-compose.yaml
+        build: never
+        state: present
+        recreate: auto
+
+    # ============================================================
+    # VERIFICATION
+    # ============================================================
+
+    - name: Wait for CrowdSec to become healthy
+      community.docker.docker_container_info:
+        name: crowdsec
+      register: crowdsec_info
+      until: >
+        crowdsec_info.container is defined and
+        crowdsec_info.container.State.Health is defined and
+        crowdsec_info.container.State.Health.Status == "healthy"
+      retries: 12
+      delay: 10
+
+    - name: Fail if CrowdSec is not healthy
+      ansible.builtin.fail:
+        msg: "CrowdSec container did not become healthy after 2 minutes."
+      when: >
+        crowdsec_info.container is not defined or
+        crowdsec_info.container.State.Health.Status != "healthy"
+
+    # ============================================================
+    # CAPI REGISTRATION
+    # ============================================================
+
+    - name: Check if CAPI credentials file already exists
+      # Checking the file directly is version-stable.
+      # The old approach grepped CLI output which changes between releases.
+      ansible.builtin.stat:
+        path: /var/lib/docker/volumes/crowdsec-config/_data/online_api_credentials.yaml
+      register: capi_creds
+      changed_when: false
+
+    - name: Register with CAPI if not already registered
+      ansible.builtin.shell: |
+        docker exec crowdsec cscli capi register
+      when: not capi_creds.stat.exists
+      # Do not fail the playbook if the VPS IP is temporarily rate-limited by CAPI
+      failed_when: false
+      register: capi_register_result
+
+    - name: Restart CrowdSec to load new CAPI credentials
+      community.docker.docker_container:
+        name: crowdsec
+        state: started
+        restart: yes
+      when:
+        - not capi_creds.stat.exists
+        - capi_register_result.rc is defined
+        - capi_register_result.rc == 0
+
+    - name: Wait for CrowdSec to recover after CAPI restart
+      community.docker.docker_container_info:
+        name: crowdsec
+      register: crowdsec_capi_info
+      until: >
+        crowdsec_capi_info.container is defined and
+        crowdsec_capi_info.container.State.Health is defined and
+        crowdsec_capi_info.container.State.Health.Status == "healthy"
+      retries: 12
+      delay: 10
+      when:
+        - not capi_creds.stat.exists
+        - capi_register_result.rc is defined
+        - capi_register_result.rc == 0
+
+    # ============================================================
+    # HUB AUTO-UPDATE CRON
+    # ============================================================
+
+    - name: Set up CrowdSec Hub auto-update cron (every 3 hours)
+      ansible.builtin.cron:
+        name: "CrowdSec Hub update and upgrade"
+        user: root
+        minute: "0"
+        hour: "*/3"
+        job: >-
+          docker exec crowdsec cscli hub update &&
+          docker exec crowdsec cscli hub upgrade
+          >> /var/log/crowdsec-hub-update.log 2>&1
