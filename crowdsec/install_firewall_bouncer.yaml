@@ -1,4 +1,3 @@
----
 - name: Install firewall bouncer
   hosts: "{{ env }}"
   become: yes
@@ -14,22 +13,28 @@
         state: restarted
 
   tasks:
-    - name: Download CrowdSec install script
-      ansible.builtin.get_url:
-        url: https://install.crowdsec.net
-        dest: /tmp/install_crowdsec.sh
+    - name: Ensure /etc/apt/keyrings directory exists
+      ansible.builtin.file:
+        path: /etc/apt/keyrings
+        state: directory
         mode: '0755'
 
-    - name: Install CrowdSec if not already installed
-      ansible.builtin.command: /tmp/install_crowdsec.sh
-      args:
-        creates: /usr/local/bin/crowdsec
+    - name: Add CrowdSec GPG key
+      ansible.builtin.get_url:
+        url: https://packagecloud.io/crowdsec/crowdsec/gpgkey
+        dest: /etc/apt/keyrings/crowdsec.asc
+        mode: '0644'
 
+    - name: Add CrowdSec Repository
+      ansible.builtin.apt_repository:
+        repo: "deb [signed-by=/etc/apt/keyrings/crowdsec.asc] https://packagecloud.io/crowdsec/crowdsec/any any main"
+        state: present
+        update_cache: yes
+        
     - name: Ensure CrowdSec Firewall Bouncer (iptables) is installed
       ansible.builtin.apt:
         name: crowdsec-firewall-bouncer-iptables
         state: present
-        update_cache: yes
 
     - name: Set CrowdSec LAPI URL in bouncer config
       ansible.builtin.lineinfile:
