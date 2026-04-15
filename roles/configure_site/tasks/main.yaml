@@ -1,2 +1,0 @@
-- name: Configure Frappe Site
-  import_tasks: configure_site.yaml

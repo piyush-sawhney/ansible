@@ -1,3 +1,0 @@
-- name: Harden SSH Configuration
-  when: ssh_hardening_enabled
-  import_tasks: harden_ssh.yaml

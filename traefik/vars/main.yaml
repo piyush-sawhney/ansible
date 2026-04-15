@@ -1,0 +1,6 @@
+traefik_repo_url: "https://github.com/piyush-sawhney/traefik.git"
+cloudflare_acme_server: "https://acme-v02.api.letsencrypt.org/directory"
+cloudflare_email: "piyush.sawhney@knaps.in"
+traefik_bouncer_version: "v1.6.0-alpha"
+traefik_dashboard_host: traefik.knaps.app
+traefik_cert_resolver: cloudflare

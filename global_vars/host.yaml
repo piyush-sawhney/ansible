@@ -1,0 +1,17 @@
+login_user: l0g1n-us3r
+deploy_user: a-ns1bl3_u53r
+
+to_remove_sudo_users: true
+docker_users:
+  - "{{ deploy_user }}"  
+ssh_allowed_users: 
+  - "{{ login_user}}"
+  - "{{ deploy_user }}"
+
+ssh_tcp_allowed_users:
+  - "{{ deploy_user }}"
+
+sudo_allowed_users:
+  - "{{ deploy_user }}"
+
+compose_dest: "/home/{{ ansible_user }}/app_server/"

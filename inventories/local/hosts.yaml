@@ -1,9 +1,0 @@
-all:
-  children:
-    wms:
-      hosts:
-        knaps.localhost
-    brandforce:
-      hosts:
-        app.brandforce.localhost
-          

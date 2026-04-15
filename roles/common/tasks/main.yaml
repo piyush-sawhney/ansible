@@ -1,3 +1,0 @@
-- name: Upgrade update and reboor server if required
-  when: upgrade_server
-  import_tasks: update_upgrade.yaml

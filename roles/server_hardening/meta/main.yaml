@@ -1,4 +1,0 @@
-dependencies:
-  - role: ssh_hardening
-  - role: user_hardening
-  - role: firewall_hardening

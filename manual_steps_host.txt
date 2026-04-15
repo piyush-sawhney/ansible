@@ -28,10 +28,21 @@ ansible-playbook -i inventories/hosts   server/docker.yaml -e '{"env": "host"}'
     # ============================================================
 
 ansible-playbook -i inventories/hosts traefik/install_traefik.yaml -e '{"env": "host"}'
+docker exec -it traefik sh
+ cat var/log/traefik/traefik.log 
+
 ansible-playbook -i inventories/hosts crowdsec/install_crowdsec.yaml -e '{"env": "host"}'
+docker exec -it crowdsec cscli metrics
+docker exec -it crowdsec cscli decisions list
+docker exec crowdsec cscli notifications test http_default
+
 ansible-playbook -i inventories/hosts crowdsec/install_firewall_bouncer.yaml -e '{"env": "host"}'
+sudo systemctl status crowdsec-firewall-bouncer
 
 wait for 5 min
 docker exec crowdsec cscli console enroll cmfxregdl000102jmwfgf83md
 
 
+ansible-playbook -i inventories/hosts postiz/install_postiz.yaml -e '{"env": "host"}'
+
+ansible-playbook -i inventories/hosts gnukhata/install_gnukhata.yaml -e '{"env": "host"}'

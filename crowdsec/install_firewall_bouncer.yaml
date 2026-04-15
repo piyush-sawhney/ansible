@@ -3,6 +3,7 @@
   become: yes
   vars_files:
     - "{{ playbook_dir }}/../global_vars/{{ env }}.yaml"
+    - "{{ playbook_dir }}/../global_vars/secrets.yaml"
     - "vars/main.yaml"
 
   handlers:

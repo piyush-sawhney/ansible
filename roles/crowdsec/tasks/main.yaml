@@ -1,3 +1,0 @@
-- name: Deploy Crowdsec
-  when: deploy_crowdsec
-  import_tasks: deploy_crowdsec.yaml

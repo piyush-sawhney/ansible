@@ -1,0 +1,2 @@
+crowdsec_repo_url: "https://github.com/piyush-sawhney/crowdsec.git"
+crowdsec_lapi_url: "http://127.0.0.1:8081/"

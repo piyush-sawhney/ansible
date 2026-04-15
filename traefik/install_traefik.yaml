@@ -4,6 +4,7 @@
   become: yes
   vars_files:
     - "{{ playbook_dir }}/../global_vars/{{ env }}.yaml"
+    - "{{ playbook_dir }}/../global_vars/secrets.yaml"
     - "vars/main.yaml"
 
   tasks:
@@ -43,6 +44,23 @@
     # ============================================================
     # SECRETS AND CONFIG FILES
     # ============================================================
+    - name: Install Apache2-utils for htpasswd command
+      become: true
+      ansible.builtin.apt:
+        name: apache2-utils
+        state: present
+        update_cache: yes
+    
+    - name: Generate Traefik basic auth bcrypt hash
+      ansible.builtin.command: >
+        htpasswd -nbB {{ traefik_user }} {{ traefik_password }}
+      register: htpasswd_output
+      no_log: true
+
+    - name: Set Traefik basic auth fact
+      ansible.builtin.set_fact:
+        traefik_basic_auth: "{{ htpasswd_output.stdout | regex_replace('\\$', '$$') }}"
+      no_log: true
 
     - name: Render Traefik .env file from Vault
       ansible.builtin.template:
@@ -81,8 +99,8 @@
       ansible.builtin.file:
         path: "{{ compose_dest }}/traefik/data/acme-cf.json"
         state: touch
-        owner: root
-        group: root
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
         mode: '0600'
       when: not acme_json.stat.exists
 
